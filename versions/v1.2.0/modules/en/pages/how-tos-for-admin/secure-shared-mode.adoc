@@ -31,6 +31,29 @@ spec:
 * *baseline*: Prevents known privilege escalations.
 * *restricted*: Maximum hardening (highest security, lower compatibility).
 
+[IMPORTANT]
+====
+The default server and agent pod/container settings do not satisfy the *restricted* Pod Security Standard on their own (see https://github.com/rancher/k3k/issues/578[k3k#578]). Deploying a cluster into a namespace that enforces `restricted` fails unless you also set `podSecurityContext` and `securityContext` on the `Cluster` (or on the `VirtualClusterPolicy`, to apply the same settings to every cluster covered by the policy) so that the pods meet the standard's requirements:
+
+----
+apiVersion: k3k.io/v1beta1
+kind: Cluster
+metadata:
+  name: my-cluster
+spec:
+  mode: shared
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+----
+====
+
 See https://kubernetes.io/docs/concepts/security/pod-security-standards/[Pod Security Standards] for more information.
 
 == Apply the Policy
