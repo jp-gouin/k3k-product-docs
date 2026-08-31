@@ -11,6 +11,4 @@
 
 == Bug Fixes & Security
 
-* **Restricted Pod Security Standard support**: Added `podSecurityContext` and `securityContext` fields to the `Cluster` and `VirtualClusterPolicy` specs, so server and agent pods can be configured to satisfy the `restricted` Pod Security Standard. See xref:how-tos-for-admin/secure-shared-mode.adoc[Securing Shared Mode Virtual Clusters]. (link:https://github.com/rancher/k3k/pull/1058[#1058])
-
 Full Changelogs: link:https://github.com/rancher/k3k/releases/tag/v1.2.0[k3k v1.2.0] | link:https://github.com/rancher/virtual-clusters-ui/releases/tag/virtual-clusters-1.2.0[UI Extension v1.2.0]
