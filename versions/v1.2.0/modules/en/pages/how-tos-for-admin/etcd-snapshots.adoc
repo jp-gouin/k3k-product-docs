@@ -1,0 +1,166 @@
+= Backing up virtual clusters with etcd snapshots
+:page-languages: [en, de, es, fr, ja, pt, zh]
+:revdate: 2026-10-08
+:page-revdate: {revdate}
+
+{k3k-product-name} can back up the etcd database of a virtual cluster through the `EtcdSnapshot` custom resource. Use this feature to protect virtual cluster data, store snapshots locally on the virtual cluster's persistent volume, or upload them to an S3-compatible object store.
+
+[NOTE]
+====
+This feature requires `dynamic` persistence. You cannot take a snapshot of a cluster that uses `ephemeral` persistence, because it has no durable storage to hold etcd data or snapshot files. For more information about persistence modes, see xref:advanced-usage.adoc[Advanced Usage].
+====
+
+Snapshot creation is supported for clusters in both shared mode and virtual mode.
+
+== Create a local snapshot
+
+Create an `EtcdSnapshot` resource and set `spec.clusterRef.name` to the name of the virtual cluster you want to back up. The snapshot is created in the same namespace as the cluster.
+
+[source,yaml]
+----
+apiVersion: k3k.io/v1beta1
+kind: EtcdSnapshot
+metadata:
+  name: my-cluster-snapshot
+  namespace: my-cluster-ns
+spec:
+  clusterRef:
+    name: my-cluster
+----
+
+Apply the resource:
+
+----
+kubectl apply -f etcd-snapshot.yaml
+----
+
+{k3k-product-name} connects to the virtual cluster's K3s server and triggers a local etcd snapshot. The resulting snapshot file is stored on the server's persistent volume, alongside the etcd database.
+
+Set `spec.compress` to `true` to compress the snapshot file:
+
+[source,yaml]
+----
+apiVersion: k3k.io/v1beta1
+kind: EtcdSnapshot
+metadata:
+  name: my-cluster-snapshot
+  namespace: my-cluster-ns
+spec:
+  clusterRef:
+    name: my-cluster
+  compress: true
+----
+
+[IMPORTANT]
+====
+`spec.clusterRef`, `spec.s3ConfigSecretRef`, and `spec.compress` are immutable. To change any of these values, delete the `EtcdSnapshot` resource and create a new one.
+====
+
+== Create a snapshot in an S3-compatible object store
+
+To upload a snapshot to an S3-compatible object store, create a `Secret` with the S3 connection details, then reference it from `spec.s3ConfigSecretRef`.
+
+The secret keys must match the fields used by K3s for https://docs.k3s.io/cli/etcd-snapshot?_highlight=snapshot#s3-compatible-object-store-support[S3-compatible object store support]:
+
+[cols="30,70", options="header"]
+|===
+| Key | Description
+
+| `etcd-s3-endpoint`
+| Endpoint of the S3-compatible object store.
+
+| `etcd-s3-access-key`
+| Access key for the object store.
+
+| `etcd-s3-secret-key`
+| Secret key for the object store.
+
+| `etcd-s3-bucket`
+| Bucket name used to store the snapshot.
+
+| `etcd-s3-folder`
+| Folder (prefix) within the bucket used to store the snapshot.
+
+| `etcd-s3-region`
+| Region of the S3 bucket.
+
+| `etcd-s3-bucket-lookup-type`
+| Bucket lookup type, for example `path` or `dns`.
+
+| `etcd-s3-insecure`
+| Set to `"true"` to allow insecure (non-TLS) connections to the endpoint.
+
+| `etcd-s3-skip-ssl-verify`
+| Set to `"true"` to skip TLS certificate verification.
+|===
+
+Create the secret in the same namespace as the virtual cluster:
+
+[source,yaml]
+----
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-cluster-s3-config
+  namespace: my-cluster-ns
+stringData:
+  etcd-s3-endpoint: s3.us-east-1.amazonaws.com
+  etcd-s3-access-key: <access-key>
+  etcd-s3-secret-key: <secret-key>
+  etcd-s3-bucket: my-k3k-snapshots
+  etcd-s3-folder: my-cluster
+  etcd-s3-region: us-east-1
+  etcd-s3-bucket-lookup-type: path
+  etcd-s3-insecure: "false"
+  etcd-s3-skip-ssl-verify: "false"
+----
+
+Create the `EtcdSnapshot` resource, referencing the secret:
+
+[source,yaml]
+----
+apiVersion: k3k.io/v1beta1
+kind: EtcdSnapshot
+metadata:
+  name: my-cluster-s3-snapshot
+  namespace: my-cluster-ns
+spec:
+  clusterRef:
+    name: my-cluster
+  s3ConfigSecretRef:
+    name: my-cluster-s3-config
+    namespace: my-cluster-ns
+----
+
+Setting `spec.s3ConfigSecretRef` causes K3s to create the etcd snapshot locally first, then upload it to the configured S3 bucket.
+
+== Verify a snapshot
+
+Check the status of the `EtcdSnapshot` resource:
+
+----
+kubectl get etcdsnapshot my-cluster-snapshot -n my-cluster-ns
+----
+
+----
+NAME                   FILE NAME
+my-cluster-snapshot    etcd-snapshot-my-cluster-server-0-1234567890
+----
+
+The `status.filename` field is populated once the snapshot is created, and the `Ready` condition reports whether the snapshot succeeded:
+
+----
+kubectl get etcdsnapshot my-cluster-snapshot -n my-cluster-ns -o jsonpath='{.status.conditions}'
+----
+
+A successful snapshot reports a `Ready` condition with status `True` and reason `SuccessfulCreate`. If the snapshot fails, the condition status is `False` and the reason is `FailedCreate`, with details in the condition message.
+
+== Delete a snapshot
+
+Deleting an `EtcdSnapshot` resource removes the corresponding snapshot file from the virtual cluster, and from the S3 bucket if one was configured:
+
+----
+kubectl delete etcdsnapshot my-cluster-snapshot -n my-cluster-ns
+----
+
+If the virtual cluster itself is being deleted, {k3k-product-name} skips removal of the snapshot file, since the whole cluster (and its storage) is being torn down.
