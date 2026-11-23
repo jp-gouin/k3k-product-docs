@@ -169,5 +169,5 @@ For more information, see k8s docs: https://kubernetes.io/docs/concepts/scheduli
 
 == Additional information
 
-* For a complete reference of all `VirtualClusterPolicy` spec fields, see xref:./references/crds.adoc#VirtualClusterPolicy[API Reference for VirtualClusterPolicy].
+* For a complete reference of all `VirtualClusterPolicy` spec fields, see xref:./references/crds.adoc#k8s-api-github-com-rancher-k3k-pkg-apis-k3k-io-v1beta1-virtualclusterpolicy[API Reference for VirtualClusterPolicy].
 * To understand how VCPs fit into the overall K3k system, see xref:./architecture.adoc[Architecture].
